@@ -1,100 +1,125 @@
 <template>
-  <div class="container">
+  <div class="form-container">
     <h2>Enregistrer une participation</h2>
-    <!-- Un formulaire pour saisir les valeurs d'une participation à ajouter -->
-    <form @submit.prevent="ajouteParticapation">
-      <div>
-        <div>Personne :</div>
 
-        <select v-model="selectedPers">
-          <option v-for="personne in data.personnes" :key="personne.id" :value="personne">
-            {{ personne.nom }} {{ personne.prenom }}
-          </option>
-        </select>
+    <!-- Sélection de la personne -->
+    <div class="form-group">
+      <label>Personne</label>
+      <select v-model="selectedPers">
+        <option :value="null" disabled>-- Choisir une personne --</option>
+        <option
+          v-for="pers in personnes"
+          :key="pers.matricule"
+          :value="pers.matricule"
+        >
+          {{ pers.nom }} {{ pers.prenom }}
+        </option>
+      </select>
+    </div>
 
-        <div>Projet :</div>
+    <!-- Sélection du projet -->
+    <div class="form-group">
+      <label>Projet</label>
+      <select v-model="selectedProjet">
+        <option :value="null" disabled>-- Choisir un projet --</option>
+        <option
+          v-for="proj in projets"
+          :key="proj.id"
+          :value="proj.id"
+        >
+          {{ proj.nom }}
+        </option>
+      </select>
+    </div>
 
-        <select v-model="selectedProjet">
-          <option v-for="projet in data.projets" :key="projet.id" :value="projet.nom">
-            {{ projet.nom }}
-          </option>
-        </select>
+    <!-- Rôle -->
+    <div class="form-group">
+      <label>Rôle</label>
+      <input type="text" v-model="inputRole" />
+    </div>
 
-        <div>Rôle :</div>
-
-        <input id="role" v-model="inputRole" size="35" >
-
-        <div>Pourcentage :</div>
-        <input id="pourcentage" type="range" v-model="selectedPourcentage" min="0" max="100" step="1">
-
-        <!-- Affichage du pourcentage -->
-        <p>Valeur sélectionnée : <strong>{{ selectedPourcentage }}%</strong></p>
-
-        <br>
-
-        <button type="submit">Enregistrer</button>
+    <!-- Pourcentage (slider) -->
+    <div class="form-group">
+      <label>Pourcentage</label>
+      <div class="slider-container">
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          v-model="selectedPourcentage"
+        />
+        <span class="slider-value">{{ selectedPourcentage }}%</span>
       </div>
-    </form>
+    </div>
+
+    <!-- Bouton Valider -->
+    <button class="btn-submit" @click="enregistrerParticipation">Enregistrer</button>
+
+    <!-- Affichage de l'erreur si besoin -->
+    <div v-if="errorMessage" class="error-message">
+      {{ errorMessage }}
+    </div>
   </div>
 </template>
 
 <script setup>
-import {onMounted, reactive, ref} from "vue";
+import {onMounted, reactive, toRefs } from "vue";
 // Importer la fonction doAjaxRequest qui gère les erreurs d'API
 import doAjaxRequest from "@/util/util.js"
 
-// Pour réinitialiser le formulaire
-const participationVide = {
-  role: "",
-  pourcentage: "",
-  projet_id: "",
-  personne_matricule: "",
-};
-
 // Les données du composant
 let data = reactive({
-  formulaire: {...participationVide},
   projets: [],
   personnes: [],
-  roles: [],
+  inputRole: '',
+  selectedProjet: null,
+  selectedPers: null,
+  selectedPourcentage: 0,
+  errorMessage: '',
 });
 
-let selectedProjet = ref(null);
-let selectedPers = ref(null);
-let selectedPourcentage = ref(0);
-let inputRole = ref(null);
+const {
+  personnes,
+  projets,
+  selectedPers,
+  selectedProjet,
+  inputRole,
+  selectedPourcentage,
+  errorMessage
+} = toRefs(data)
 
-function ajouteParticapation() {
-  // Mise à jour des valeurs du formulaire avant l'envoi
-  data.formulaire = {
-    role: inputRole.value,
-    pourcentage: Number(selectedPourcentage.value/100),
-    projetNom: selectedProjet.value,
-    personneNom: selectedPers.value.nom,
-    personnePrenom: selectedPers.value.prenom // vous devrez aussi ajouter ceci
-  };
-console.log( data.formulaire)
-  // Ajoutez ces logs
-  console.log("Type de personne_matricule:", typeof data.formulaire.personne_matricule);
-  console.log("Valeur complète avant envoi:", data.formulaire);
-  const options = {
-    method: "POST",
-    body: JSON.stringify(data.formulaire),
-    headers: {
-      "Content-Type": "application/json",
-    },
-  };
+// Enregistrer la participation
+function enregistrerParticipation() {
 
-  doAjaxRequest("/api/participations", options)
+  data.errorMessage = ''
+
+  if (!data.selectedPers || !data.selectedProjet) {
+    data.errorMessage = 'Sélectionnez une personne et un projet.'
+    return
+  }
+  if (!data.inputRole) {
+    data.errorMessage = 'Précisez le rôle.'
+    return
+  }
+  if (data.selectedPourcentage <= 0) {
+    data.errorMessage = 'Le pourcentage doit être > 0.'
+    return
+  }
+  const url =
+    `http://localhost:8989/api/gestion/participation?matricule=${data.selectedPers}` +
+    `&codeProjet=${data.selectedProjet}` +
+    `&role=${encodeURIComponent(data.inputRole)}` +
+    `&pourcentage=${Number(data.selectedPourcentage/100)}`
+
+  doAjaxRequest(url, { method: 'POST' })
     .then((result) => {
-      console.log("Participation ajoutée :", result);
-      alert("Participation enregistrée avec succès !");
-
-      // Réinitialisation du formulaire
-      data.formulaire = { ...participationVide };
-      selectedProjet.value = null;
-      selectedPers.value = null;
-      selectedPourcentage.value = 0;
+      console.log('Réponse du serveur :', result)
+      alert('Participation enregistrée avec succès !')
+      data.selectedPers = null
+      data.selectedProjet = null
+      data.inputRole = ''
+      data.selectedPourcentage = 0
     })
     .catch(error => alert(error.message));
 }
@@ -117,109 +142,88 @@ function fetchPersonne() {
     .catch(error => alert(error.message));
 }
 
-// Appeler la fonction fetchProjet() pour récupérer la liste des projets au chargement du composant
 onMounted(() => {
   fetchProjet();
   fetchPersonne();
 });
 </script>
 
-<!-- Un CSS pour ce composant -->
 <style scoped>
-.container {
+.form-container {
+  max-width: 400px;
   margin: 2rem auto;
-  max-width: 600px;
-  background-color: #f9f9f9;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.form-group {
-  margin-bottom: 15px;
-}
-
-.label {
-  display: block;
+/* Titre */
+.form-container h2 {
+  margin-bottom: 1.5rem;
+  font-size: 1.2rem;
   font-weight: bold;
-  margin-bottom: 5px;
 }
 
-.input-field {
+/* Groupes de champs */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+/* Labels */
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+/* Select et input text */
+.form-group select,
+.form-group input[type="text"] {
   width: 100%;
-  padding: 10px;
-  font-size: 1rem;
+  padding: 0.5rem;
+  font-size: 0.9rem;
   border: 1px solid #ccc;
-  border-radius: 5px;
+  border-radius: 4px;
 }
 
-.input-field:focus {
-  outline: none;
-  border-color: #007BFF;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+/* Container pour le slider et la valeur */
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
-.button-container {
-  text-align: center;
+/* Slider (range) */
+.slider-container input[type="range"] {
+  flex: 1;
 }
 
-.submit-button {
-  padding: 10px 20px;
-  font-size: 1rem;
+/* Valeur du pourcentage */
+.slider-value {
+  font-weight: 500;
+}
+
+/* Bouton Enregistrer */
+.btn-submit {
+  display: inline-block;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
   color: #fff;
+  background-color: #007BFF; /* Bleu style bootstrap */
+  border-radius: 4px;
   border: none;
-  border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.2s ease;
 }
 
-.submit-button:hover {
+.btn-submit:hover {
   background-color: #0056b3;
 }
 
-.table-container {
-  margin-top: 20px;
+/* Erreur en rouge */
+.error-message {
+  margin-top: 1rem;
+  color: red;
 }
-
-table {
-  width: 100%;
-  border-collapse: collapse; /* Supprime les bordures en double */
-  margin-top: 10px;
-}
-
-thead th {
-  background-color: #007BFF;
-  color: #fff;
-  padding: 10px;
-  text-align: left; /* Alignement à gauche */
-  border: 1px solid #ddd;
-}
-
-tbody td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left; /* Alignement à gauche */
-}
-
-tbody tr:nth-child(odd) {
-  background-color: #f2f2f2; /* Lignes alternées pour une meilleure lisibilité */
-}
-
-tbody tr:hover {
-  background-color: #eaeaea;
-}
-
-th, td {
-  font-size: 0.9rem;
-  text-align: left;
-}
-
-code {
-  color: #d63384;
-  font-weight: bold;
-  background-color: #f8f9fa;
-  padding: 2px 4px;
-  border-radius: 3px;
-}
-
 </style>
